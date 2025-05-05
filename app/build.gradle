@@ -36,9 +36,12 @@ dependencies {
     implementation libs.activity
     implementation libs.constraintlayout
     implementation libs.firebase.auth
-    implementation 'com.google.firebase:firebase-auth:23.0.0'
-    implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
-    implementation("com.google.firebase:firebase-storage")
+    implementation libs.glide
+    annotationProcessor libs.compiler
+    implementation libs.firebase.auth.v2300
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.storage)
+    implementation libs.material.v1100
     implementation libs.firebase.database
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit

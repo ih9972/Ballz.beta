@@ -19,6 +19,7 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
 
 public class MainActivity extends AppCompatActivity {
     EditText EmailET;
@@ -61,36 +62,42 @@ public class MainActivity extends AppCompatActivity {
                             FirebaseUser user = mAuth.getCurrentUser();
                             current_user_id = user.getUid();
 
-                            FBRef.refUsers.child(current_user_id).get().addOnCompleteListener(roleTask -> {
-                                if (roleTask.isSuccessful()) {
-                                    if (roleTask.getResult().exists()) {
-                                        role = roleTask.getResult().child("role").getValue(Integer.class);
-                                        Log.d("USER_ROLE", "Role is: " + role);
-                                        Intent homeIntent = new Intent(context, Messages.class);
-                                        if (role == 2 || role == 4) {
-                                            homeIntent.putExtra("role", 0);
-                                        } else {
-                                            homeIntent.putExtra("role", 1);
-                                        }
-                                        startActivity(homeIntent);
-                                        finish();
+                            FBRef.refUsers.get().addOnCompleteListener(usersTask -> {
+                                if (usersTask.isSuccessful()) {
+                                    DataSnapshot companiesSnap = usersTask.getResult();
+                                    boolean found = false;
 
-                                    } else {
-                                        Log.e("USER_ROLE", "User not found in DB");
+                                    for (DataSnapshot companySnap : companiesSnap.getChildren()) {
+                                        if (companySnap.hasChild(current_user_id)) {
+                                            DataSnapshot userSnap = companySnap.child(current_user_id);
+                                            role = userSnap.child("role").getValue(Integer.class);
+
+                                            Log.d("USER_ROLE", "Role is: " + role);
+
+                                            Intent homeIntent = new Intent(context, Messages.class);
+                                            homeIntent.putExtra("role", (role == 2 || role == 4) ? 0 : 1);
+                                            startActivity(homeIntent);
+                                            finish();
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (!found) {
                                         Toast.makeText(context, "User data not found", Toast.LENGTH_SHORT).show();
                                     }
                                 } else {
-                                    Log.e("USER_ROLE", "Error reading from DB", roleTask.getException());
-                                    Toast.makeText(context, "Failed to read role", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(context, "Failed to read user data", Toast.LENGTH_SHORT).show();
                                 }
                             });
 
                         } else {
-                            Log.w(TAG, "signInWithEmail:failure", task.getException());
                             Toast.makeText(context, "Authentication failed: " + task.getException().getMessage(),
                                     Toast.LENGTH_SHORT).show();
                         }
                     }
                 });
     }
+
 }
+//u123456a
