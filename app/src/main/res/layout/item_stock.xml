@@ -7,33 +7,51 @@
     android:gravity="center_vertical">
 
     <TextView
-        android:id="@+id/itemName"
+        android:id="@+id/item_name"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="2"
         android:text="item1"
-        android:textSize="16sp"/>
+        android:textSize="16sp" />
 
     <TextView
-        android:id="@+id/itemDescription"
+        android:id="@+id/item_description"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="2"
         android:text="description:"
-        android:textSize="16sp"/>
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/item_availability"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Available"
+        android:textSize="14sp"
+        android:textColor="@android:color/holo_green_dark"
+        android:layout_marginEnd="8dp"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/itemAmount"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:text="3"
-        android:gravity="center"/>
+        android:text="Amount: 0"
+        android:layout_marginStart="8dp"
+        android:visibility="gone" />
+
+    <EditText
+        android:id="@+id/item_amount"
+        android:layout_width="60dp"
+        android:layout_height="wrap_content"
+        android:hint="Qty"
+        android:inputType="number"
+        android:visibility="gone" />
 
     <ImageView
         android:id="@+id/itemImage"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_marginStart="8dp"
-        android:src="@drawable/ic_launcher_foreground"/>
+        android:src="@drawable/ic_launcher_foreground" />
 </LinearLayout>

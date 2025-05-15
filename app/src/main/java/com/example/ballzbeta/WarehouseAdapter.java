@@ -6,31 +6,22 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.bumptech.glide.Glide;
 import com.example.ballzbeta.objects.WarehouseItem;
-
 import java.util.List;
 
 /**
- * WarehouseAdapter is a custom RecyclerView adapter that displays warehouse inventory items.
- * It binds {@link WarehouseItem} objects to the item_stock.xml layout, showing the item name,
- * total quantity, description, and image.
+ * Adapter for displaying warehouse items in a RecyclerView.
  */
 public class WarehouseAdapter extends RecyclerView.Adapter<WarehouseAdapter.ViewHolder> {
 
     private Context context;
     private List<WarehouseItem> warehouseItems;
+    private OnItemLongClickListener longClickListener;
 
-    /**
-     * Constructs the adapter with the context and list of warehouse items.
-     *
-     * @param context         The context of the parent activity.
-     * @param warehouseItems  The list of items to display.
-     */
     public WarehouseAdapter(Context context, List<WarehouseItem> warehouseItems) {
         this.context = context;
         this.warehouseItems = warehouseItems;
@@ -46,7 +37,6 @@ public class WarehouseAdapter extends RecyclerView.Adapter<WarehouseAdapter.View
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         WarehouseItem item = warehouseItems.get(position);
-
         holder.itemName.setText(item.getItem().getName());
         holder.itemAmount.setText("Amount: " + item.getTotal());
         holder.itemDescription.setText("Description: " + item.getItem().getDescription());
@@ -55,6 +45,15 @@ public class WarehouseAdapter extends RecyclerView.Adapter<WarehouseAdapter.View
                 .load(item.getItem().getImageUri())
                 .placeholder(R.drawable.ic_launcher_foreground)
                 .into(holder.itemImage);
+
+        holder.itemImage.setOnClickListener(v -> showImageDialog(item.getItem().getImageUri()));
+
+        holder.itemView.setOnLongClickListener(v -> {
+            if (longClickListener != null) {
+                longClickListener.onItemLongClick(item, position);
+            }
+            return true;
+        });
     }
 
     @Override
@@ -62,24 +61,34 @@ public class WarehouseAdapter extends RecyclerView.Adapter<WarehouseAdapter.View
         return warehouseItems.size();
     }
 
-    /**
-     * ViewHolder class that holds and binds the UI components for each item view.
-     */
     public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView itemName, itemAmount, itemDescription;
         ImageView itemImage;
 
-        /**
-         * Initializes the item view components.
-         *
-         * @param itemView The root view of the item layout.
-         */
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
-            itemName = itemView.findViewById(R.id.itemName);
+            itemName = itemView.findViewById(R.id.item_name);
             itemAmount = itemView.findViewById(R.id.itemAmount);
-            itemDescription = itemView.findViewById(R.id.itemDescription);
+            itemDescription = itemView.findViewById(R.id.item_description);
             itemImage = itemView.findViewById(R.id.itemImage);
         }
+    }
+
+    public interface OnItemLongClickListener {
+        void onItemLongClick(WarehouseItem item, int position);
+    }
+
+    public void setOnItemLongClickListener(OnItemLongClickListener listener) {
+        this.longClickListener = listener;
+    }
+
+    private void showImageDialog(String imageUrl) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_image_preview, null);
+        ImageView fullImage = dialogView.findViewById(R.id.fullImage);
+        Glide.with(context).load(imageUrl).into(fullImage);
+        builder.setView(dialogView);
+        builder.setPositiveButton("Close", (dialog, which) -> dialog.dismiss());
+        builder.show();
     }
 }

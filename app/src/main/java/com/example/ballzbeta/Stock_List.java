@@ -75,12 +75,13 @@ public class Stock_List extends AppCompatActivity {
                 }
             }
         });
-
         recyclerView = findViewById(R.id.equipmentRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         warehouseItems = new ArrayList<>();
         adapter = new WarehouseAdapter(this, warehouseItems);
         recyclerView.setAdapter(adapter);
+
+        adapter.setOnItemLongClickListener((item, position) -> showEditItemDialog(item, position));
 
         findUserCompanyAndLoadData();
     }
@@ -229,4 +230,112 @@ public class Stock_List extends AppCompatActivity {
             imageUri = data.getData();
         }
     }
+    private void showEditItemDialog(WarehouseItem item, int position) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_item, null);
+
+        EditText inputName = dialogView.findViewById(R.id.inputName);
+        EditText inputAmount = dialogView.findViewById(R.id.inputAmount);
+        EditText inputDesc = dialogView.findViewById(R.id.inputDesc);
+        Button selectImageBtn = dialogView.findViewById(R.id.selectImageBtn);
+
+        // Pre-fill existing data
+        inputName.setText(item.getItem().getName());
+        inputAmount.setText(String.valueOf(item.getTotal()));
+        inputDesc.setText(item.getItem().getDescription());
+
+        final Uri[] updatedImageUri = {null}; // to capture new image uri
+
+        selectImageBtn.setOnClickListener(v -> {
+            String[] options = {"Choose from Gallery", "Take a Photo"};
+            new AlertDialog.Builder(this)
+                    .setTitle("Update Image")
+                    .setItems(options, (dialog, which) -> {
+                        if (which == 0) {
+                            Intent galleryIntent = new Intent(Intent.ACTION_GET_CONTENT);
+                            galleryIntent.setType("image/*");
+                            startActivityForResult(galleryIntent, PICK_IMAGE_REQUEST);
+                        } else {
+                            File photoFile = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "edit_temp.jpg");
+                            imageUri = FileProvider.getUriForFile(this, getPackageName() + ".provider", photoFile);
+                            Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, imageUri);
+                            startActivityForResult(cameraIntent, CAMERA_REQUEST);
+                            updatedImageUri[0] = imageUri;
+                        }
+                    })
+                    .show();
+        });
+
+        new AlertDialog.Builder(this)
+                .setTitle("Edit Item")
+                .setView(dialogView)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String newName = inputName.getText().toString().trim();
+                    String amountStr = inputAmount.getText().toString().trim();
+                    String newDesc = inputDesc.getText().toString().trim();
+
+                    if (newName.isEmpty() || amountStr.isEmpty()) {
+                        Toast.makeText(this, "Name and amount required", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    int newAmount = Integer.parseInt(amountStr);
+                    item.getItem().setName(newName);
+                    item.getItem().setDescription(newDesc);
+                    item.setTotal(newAmount);
+
+                    // Update image if changed
+                    if (updatedImageUri[0] != null) {
+                        uploadUpdatedImage(updatedImageUri[0], item, position);
+                    } else {
+                        updateItemInDatabase(item, position);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+    /**
+     * Uploads a new image to Firebase Storage and updates the warehouse item.
+     *
+     * @param newUri  The new image URI selected or captured by the user.
+     * @param item    The warehouse item to update.
+     * @param position The position of the item in the list.
+     */
+    private void uploadUpdatedImage(Uri newUri, WarehouseItem item, int position) {
+        String fileName = "images/" + System.currentTimeMillis() + "_edit.jpg";
+        StorageReference storageRef = FirebaseStorage.getInstance().getReference(fileName);
+
+        storageRef.putFile(newUri)
+                .addOnSuccessListener(taskSnapshot -> storageRef.getDownloadUrl()
+                        .addOnSuccessListener(downloadUri -> {
+                            item.getItem().setImageUri(downloadUri.toString());
+                            updateItemInDatabase(item, position);
+                        }))
+                .addOnFailureListener(e ->
+                        Toast.makeText(this, "Image update failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+
+    /**
+     * Updates the given item in Firebase and notifies the adapter.
+     *
+     * @param item     The item to update.
+     * @param position The position in the RecyclerView.
+     */
+    private void updateItemInDatabase(WarehouseItem item, int position) {
+        String itemId =""+ item.getItem().getId();
+        if (companyId == null || itemId == null) return;
+
+        FirebaseDatabase.getInstance().getReference("Admin")
+                .child(companyId)
+                .child("Wearhouse")
+                .child(itemId)
+                .setValue(item)
+                .addOnSuccessListener(unused -> {
+                    warehouseItems.set(position, item);
+                    adapter.notifyItemChanged(position);
+                    Toast.makeText(this, "Item updated", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+
 }
