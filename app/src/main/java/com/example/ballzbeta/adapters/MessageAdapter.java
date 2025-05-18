@@ -14,6 +14,7 @@ import com.example.ballzbeta.adapters.FulfillmentItemAdapter;
 import com.example.ballzbeta.adapters.OrderItemAdapter;
 import com.example.ballzbeta.R;
 import com.example.ballzbeta.objects.Order;
+import com.example.ballzbeta.objects.OrderItem;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.*;
 
@@ -120,10 +121,12 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
     /**
      * Shows the fulfillment dialog where warehouse staff can confirm packed amounts.
      */
-    private void showFulfillmentDialog(View view, Order order) {
-        String currentUid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+    private void showFulfillmentDialog(final View view, final Order order) {
+        final String currentUid = FirebaseAuth.getInstance().getCurrentUser().getUid();
 
-        View dialogView = LayoutInflater.from(view.getContext()).inflate(R.layout.dialog_order_fulfillment, null);
+        View dialogView = LayoutInflater.from(view.getContext())
+                .inflate(R.layout.dialog_order_fulfillment, null);
+
         RecyclerView recyclerView = dialogView.findViewById(R.id.fulfillmentRecyclerView);
         TextView notesText = dialogView.findViewById(R.id.notesText);
         TextView pickupDateText = dialogView.findViewById(R.id.pickupDateText);
@@ -132,70 +135,95 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
         notesText.setText("Notes: " + order.getRemark());
 
         String[] dateParts = order.getDateTime().split("\\|");
-        String pickupOnly = dateParts.length > 1 ? dateParts[1].trim() : order.getDateTime();
+        String pickupOnly = (dateParts.length > 1) ? dateParts[1].trim() : order.getDateTime();
         pickupDateText.setText("Pickup: " + pickupOnly);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(view.getContext()));
-        recyclerView.setAdapter(new FulfillmentItemAdapter(order.getOrderItemList()));
+        final FulfillmentItemAdapter fulfillmentAdapter = new FulfillmentItemAdapter(order.getOrderItemList());
+        recyclerView.setAdapter(fulfillmentAdapter);
 
-        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(view.getContext())
+        final androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(view.getContext())
                 .setTitle("Fulfill Order")
                 .setView(dialogView)
                 .setCancelable(false)
                 .create();
 
-        doneButton.setOnClickListener(btn -> {
-            order.setDone(true);
+        doneButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                order.setDone(true);
 
-            DatabaseReference usersRef = FirebaseDatabase.getInstance().getReference("Users");
-            usersRef.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot snapshot) {
-                    for (DataSnapshot companySnap : snapshot.getChildren()) {
-                        if (companySnap.hasChild(currentUid)) {
-                            String companyId = companySnap.getKey();
-                            DatabaseReference ordersRef = FirebaseDatabase.getInstance()
-                                    .getReference("Admin")
-                                    .child(companyId)
-                                    .child("Orders");
-
-                            ordersRef.orderByChild("dateTime").equalTo(order.getDateTime())
-                                    .addListenerForSingleValueEvent(new ValueEventListener() {
-                                        @Override
-                                        public void onDataChange(@NonNull DataSnapshot snap) {
-                                            for (DataSnapshot orderSnap : snap.getChildren()) {
-                                                orderSnap.getRef().setValue(order);
-                                                break;
-                                            }
-                                            int position = messageList.indexOf(order);
-                                            if (position != -1) {
-                                                messageList.set(position, order);
-                                                notifyItemChanged(position);
-                                            }
-                                            dialog.dismiss();
-
-                                            dialog.dismiss();
-                                        }
-
-                                        @Override
-                                        public void onCancelled(@NonNull DatabaseError error) {
-                                            // Handle error
-                                        }
-                                    });
-                            break;
-                        }
+                // Build missing item remark
+                StringBuilder remarkBuilder = new StringBuilder();
+                for (OrderItem item : order.getOrderItemList()) {
+                    int requested = item.getAmount();
+                    int fulfilled = item.getFulfilledAmount();
+                    if (fulfilled < requested) {
+                        int missing = requested - fulfilled;
+                        remarkBuilder.append("You're missing ")
+                                .append(missing)
+                                .append(" of ")
+                                .append(item.getItem().getName())
+                                .append("\n");
                     }
                 }
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError error) {
-                    // Handle error
+                if (remarkBuilder.length() > 0) {
+                    order.setRemark(remarkBuilder.toString().trim());
                 }
-            });
+
+                // Find company and update Firebase
+                DatabaseReference usersRef = FirebaseDatabase.getInstance().getReference("Users");
+                usersRef.addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        for (DataSnapshot companySnap : snapshot.getChildren()) {
+                            if (companySnap.hasChild(currentUid)) {
+                                String companyId = companySnap.getKey();
+                                DatabaseReference ordersRef = FirebaseDatabase.getInstance()
+                                        .getReference("Admin")
+                                        .child(companyId)
+                                        .child("Orders");
+
+                                ordersRef.orderByChild("dateTime").equalTo(order.getDateTime())
+                                        .addListenerForSingleValueEvent(new ValueEventListener() {
+                                            @Override
+                                            public void onDataChange(@NonNull DataSnapshot snap) {
+                                                for (DataSnapshot orderSnap : snap.getChildren()) {
+                                                    orderSnap.getRef().setValue(order);
+                                                    break;
+                                                }
+
+                                                // Update UI
+                                                int position = messageList.indexOf(order);
+                                                if (position != -1) {
+                                                    messageList.set(position, order);
+                                                    notifyItemChanged(position);
+                                                }
+
+                                                dialog.dismiss();
+                                            }
+
+                                            @Override
+                                            public void onCancelled(@NonNull DatabaseError error) {
+                                                // Handle error
+                                            }
+                                        });
+                                break;
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+                        // Handle error
+                    }
+                });
+            }
         });
 
         dialog.show();
     }
+
 
     /**
      * Shows a read-only dialog with full order details.
