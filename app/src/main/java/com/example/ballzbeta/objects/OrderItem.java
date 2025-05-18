@@ -4,6 +4,7 @@ public class OrderItem {
     private int id;
     private Item item;
     private int amount;
+    private int fulfilledAmount;
 
     public OrderItem() {}
 
@@ -12,7 +13,9 @@ public class OrderItem {
         this.item = item;
         this.amount = amount;
     }
-
+    public int getFulfilledAmount() {
+        return fulfilledAmount;
+    }
     public int getId() {
         return id;
     }
@@ -33,6 +36,9 @@ public class OrderItem {
         return amount;
     }
 
+    public void setFulfilledAmount(int fulfilledAmount) {
+        this.fulfilledAmount = fulfilledAmount;
+    }
     public void setAmount(int amount) {
         this.amount = amount;
     }

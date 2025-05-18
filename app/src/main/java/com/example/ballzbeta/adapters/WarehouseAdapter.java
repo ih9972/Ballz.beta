@@ -1,4 +1,4 @@
-package com.example.ballzbeta;
+package com.example.ballzbeta.adapters;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
+import com.example.ballzbeta.R;
 import com.example.ballzbeta.objects.WarehouseItem;
 import java.util.List;
 
@@ -30,7 +31,7 @@ public class WarehouseAdapter extends RecyclerView.Adapter<WarehouseAdapter.View
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(context).inflate(R.layout.item_stock, parent, false);
+        View view = LayoutInflater.from(context).inflate(R.layout.item_stock_display, parent, false);
         return new ViewHolder(view);
     }
 
@@ -84,7 +85,7 @@ public class WarehouseAdapter extends RecyclerView.Adapter<WarehouseAdapter.View
 
     private void showImageDialog(String imageUrl) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_image_preview, null);
+        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_item_image_preview, null);
         ImageView fullImage = dialogView.findViewById(R.id.fullImage);
         Glide.with(context).load(imageUrl).into(fullImage);
         builder.setView(dialogView);

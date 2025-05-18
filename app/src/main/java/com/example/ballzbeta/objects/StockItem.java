@@ -1,4 +1,4 @@
-package com.example.ballzbeta;
+package com.example.ballzbeta.objects;
 
 public class StockItem {
     private String name;

@@ -1,4 +1,4 @@
-package com.example.ballzbeta;
+package com.example.ballzbeta.adapters;
 
 import android.content.Context;
 import android.text.Editable;
@@ -16,6 +16,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.example.ballzbeta.R;
 import com.example.ballzbeta.objects.WarehouseItem;
 
 import java.util.ArrayList;
@@ -54,7 +55,7 @@ public class WarehouseRequestAdapter extends RecyclerView.Adapter<WarehouseReque
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(context).inflate(R.layout.item_stock_editable, parent, false);
+        View view = LayoutInflater.from(context).inflate(R.layout.item_stock_order_input, parent, false);
         return new ViewHolder(view);
     }
 

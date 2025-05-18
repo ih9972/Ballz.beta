@@ -15,6 +15,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.ballzbeta.adapters.MessageAdapter;
+import com.example.ballzbeta.adapters.WarehouseRequestAdapter;
 import com.example.ballzbeta.objects.Order;
 import com.example.ballzbeta.objects.OrderItem;
 import com.example.ballzbeta.objects.WarehouseItem;
@@ -27,12 +29,24 @@ import com.google.firebase.database.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+/**
+ * Messages activity allows users to create new equipment orders and view their
+ * incoming/outgoing messages (orders and system notifications).
+ */
 public class Messages extends AppCompatActivity {
 
+    // UI components for order dialog
     private EditText notesEditText, dateEditText, searchEditText;
     private Spinner receiverSpinner;
-    private WarehouseRequestAdapter adapter;
+    private WarehouseRequestAdapter requestAdapter;
+
+    // UI for message display
+    private RecyclerView recyclerMessages;
+    private MessageAdapter messageAdapter;
+
+    // Data
     private List<WarehouseItem> warehouseItems = new ArrayList<>();
+    private List<Order> messageList = new ArrayList<>();
     private List<String> receiverNames = new ArrayList<>();
     private List<String> receiverUids = new ArrayList<>();
     private String companyId;
@@ -42,6 +56,13 @@ public class Messages extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_messages);
 
+        // Setup RecyclerView for displaying messages
+        recyclerMessages = findViewById(R.id.messageRecyclerView);
+        recyclerMessages.setLayoutManager(new LinearLayoutManager(this));
+        messageAdapter = new MessageAdapter(messageList);
+        recyclerMessages.setAdapter(messageAdapter);
+
+        // Setup bottom navigation bar
         BottomNavigationView nav = findViewById(R.id.bottom_navigation);
         nav.setSelectedItemId(R.id.nav_messages);
         nav.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
@@ -60,9 +81,15 @@ public class Messages extends AppCompatActivity {
                 return true;
             }
         });
+
+        // Start setup of company and message display
+        identifyCompanyAndLoad();
     }
 
-    public void Add_New_Order(View view) {
+    /**
+     * Determines the user's company and loads relevant message data.
+     */
+    private void identifyCompanyAndLoad() {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
@@ -91,12 +118,8 @@ public class Messages extends AppCompatActivity {
                                     }
                                 }
 
-                                if (receiverNames.isEmpty()) {
-                                    Toast.makeText(Messages.this, "No warehouse workers found", Toast.LENGTH_SHORT).show();
-                                    return;
-                                }
-
-                                showRequestDialog(senderUid);
+                                messageAdapter.fetchUserNames(companyId); // Load user name map
+                                loadMessages(); // Load messages for display
                                 return;
                             }
                         }
@@ -111,6 +134,55 @@ public class Messages extends AppCompatActivity {
                 });
     }
 
+    /**
+     * Fetches all messages (orders/notifications) from Firebase for the current company.
+     */
+    private void loadMessages() {
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        DatabaseReference ordersRef = FirebaseDatabase.getInstance()
+                .getReference("Admin")
+                .child(companyId)
+                .child("Orders");
+
+        ordersRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                messageList.clear();
+                for (DataSnapshot snap : snapshot.getChildren()) {
+                    Order order = snap.getValue(Order.class);
+                    if (order != null && (
+                            uid.equals(order.getSender()) ||
+                                    uid.equals(order.getReceiver()) ||
+                                    "system".equals(order.getSender()))) {
+                        messageList.add(order);
+                    }
+                }
+                messageAdapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(Messages.this, "Failed to load messages", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Opens the dialog to create a new order.
+     */
+    public void Add_New_Order(View view) {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        showRequestDialog(currentUser.getUid());
+    }
+
+    /**
+     * Displays the UI for creating and submitting a new order.
+     */
     private void showRequestDialog(String senderUid) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_create_order, null);
 
@@ -125,44 +197,32 @@ public class Messages extends AppCompatActivity {
         spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         receiverSpinner.setAdapter(spinnerAdapter);
 
-        adapter = new WarehouseRequestAdapter(this, warehouseItems);
+        requestAdapter = new WarehouseRequestAdapter(this, warehouseItems);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.setAdapter(adapter);
+        recyclerView.setAdapter(requestAdapter);
 
         searchEditText.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override
             public void afterTextChanged(Editable editable) {
-                adapter.getFilter().filter(editable.toString());
+                requestAdapter.getFilter().filter(editable.toString());
             }
         });
 
-        dateEditText.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Calendar calendar = Calendar.getInstance();
-                DatePickerDialog picker = new DatePickerDialog(Messages.this,
-                        new DatePickerDialog.OnDateSetListener() {
-                            @Override
-                            public void onDateSet(DatePicker view, int y, int m, int d) {
-                                dateEditText.setText(d + "/" + (m + 1) + "/" + y);
-                            }
-                        },
-                        calendar.get(Calendar.YEAR),
-                        calendar.get(Calendar.MONTH),
-                        calendar.get(Calendar.DAY_OF_MONTH));
-                picker.show();
-            }
+        dateEditText.setOnClickListener(v -> {
+            Calendar calendar = Calendar.getInstance();
+            DatePickerDialog picker = new DatePickerDialog(Messages.this,
+                    (view, y, m, d) -> dateEditText.setText(d + "/" + (m + 1) + "/" + y),
+                    calendar.get(Calendar.YEAR),
+                    calendar.get(Calendar.MONTH),
+                    calendar.get(Calendar.DAY_OF_MONTH));
+            picker.show();
         });
 
-        submitButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                sendOrder(senderUid);
-            }
-        });
+        submitButton.setOnClickListener(v -> sendOrder(senderUid));
 
+        // Load items for order
         DatabaseReference itemsRef = FirebaseDatabase.getInstance()
                 .getReference("Admin")
                 .child(companyId)
@@ -176,8 +236,8 @@ public class Messages extends AppCompatActivity {
                     WarehouseItem item = itemSnap.getValue(WarehouseItem.class);
                     warehouseItems.add(item);
                 }
-                adapter = new WarehouseRequestAdapter(Messages.this, warehouseItems);
-                recyclerView.setAdapter(adapter);
+                requestAdapter = new WarehouseRequestAdapter(Messages.this, warehouseItems);
+                recyclerView.setAdapter(requestAdapter);
             }
 
             @Override
@@ -193,6 +253,9 @@ public class Messages extends AppCompatActivity {
                 .show();
     }
 
+    /**
+     * Sends a new order to Firebase after validation.
+     */
     private void sendOrder(String senderUid) {
         String notes = notesEditText.getText().toString().trim();
         String date = dateEditText.getText().toString().trim();
@@ -212,7 +275,7 @@ public class Messages extends AppCompatActivity {
         List<OrderItem> orderItems = new ArrayList<>();
         int itemId = 0;
 
-        for (WarehouseItem wi : adapter.getAllItems()) {
+        for (WarehouseItem wi : requestAdapter.getAllItems()) {
             if (wi.getTotal() > 0) {
                 orderItems.add(new OrderItem(itemId++, wi.getItem(), wi.getTotal()));
             }
@@ -245,6 +308,7 @@ public class Messages extends AppCompatActivity {
         orderRef.setValue(order).addOnCompleteListener(task -> {
             if (task.isSuccessful()) {
                 Toast.makeText(Messages.this, "Order sent successfully", Toast.LENGTH_SHORT).show();
+                loadMessages(); // Reload messages after sending
             } else {
                 Toast.makeText(Messages.this, "Failed to send order", Toast.LENGTH_LONG).show();
             }

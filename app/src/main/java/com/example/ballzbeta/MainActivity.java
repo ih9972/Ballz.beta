@@ -5,7 +5,6 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -22,46 +21,42 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 
 /**
- * Handles login logic and optionally uses saved credentials from SharedPreferences.
+ * MainActivity handles user login with optional SharedPreferences-based
+ * credential storage and role-based redirection.
  */
 public class MainActivity extends AppCompatActivity {
 
-    private EditText EmailET;
-    private EditText PasswordET;
+    private EditText EmailET, PasswordET;
     private FirebaseAuth mAuth;
     private Context context;
     private String current_user_id;
     private int role;
 
-    /**
-     * Initializes FirebaseAuth, UI elements, and prompts to use saved credentials.
-     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        context = this;
 
         EmailET = findViewById(R.id.EmailET);
         PasswordET = findViewById(R.id.PasswordET);
-        context = this;
         mAuth = FirebaseAuth.getInstance();
 
         checkForSavedCredentials();
     }
 
     /**
-     * Checks if saved email and password exist in SharedPreferences.
-     * If so, prompts the user to auto-fill them using an AlertDialog.
+     * Checks SharedPreferences for saved credentials and prompts the user to reuse them.
      */
     private void checkForSavedCredentials() {
         SharedPreferences prefs = getSharedPreferences("user_credentials", MODE_PRIVATE);
-        String savedEmail = prefs.getString("email", null);
-        String savedPassword = prefs.getString("password", null);
+        final String savedEmail = prefs.getString("email", null);
+        final String savedPassword = prefs.getString("password", null);
 
         if (savedEmail != null && savedPassword != null) {
             new AlertDialog.Builder(this)
                     .setTitle("Use Saved Login?")
-                    .setMessage("Would you like to log in using saved credentials?")
+                    .setMessage("Would you like to log in as: " + savedEmail + "?")
                     .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int which) {
                             EmailET.setText(savedEmail);
@@ -75,22 +70,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Navigates to the SignUp screen.
+     * Called when the login button is clicked.
      *
-     * @param view Button click
-     */
-    public void goto_signup(View view) {
-        startActivity(new Intent(this, Sign_up.class));
-    }
-
-    /**
-     * Authenticates the user and saves email/password to SharedPreferences if successful.
-     *
-     * @param view Button click
+     * @param view the login button
      */
     public void login(View view) {
-        String email = EmailET.getText().toString().trim();
-        String password = PasswordET.getText().toString().trim();
+        final String email = EmailET.getText().toString().trim();
+        final String password = PasswordET.getText().toString().trim();
 
         if (email.isEmpty() || password.isEmpty()) {
             Toast.makeText(context, "Please fill in both fields", Toast.LENGTH_SHORT).show();
@@ -98,92 +84,111 @@ public class MainActivity extends AppCompatActivity {
         }
 
         mAuth.signInWithEmailAndPassword(email, password)
-                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
+                .addOnCompleteListener(MainActivity.this, new OnCompleteListener<AuthResult>() {
                     @Override
                     public void onComplete(@NonNull Task<AuthResult> task) {
                         if (task.isSuccessful()) {
                             FirebaseUser user = mAuth.getCurrentUser();
                             current_user_id = user.getUid();
 
-                            // Save only email and password in SharedPreferences
-                            SharedPreferences.Editor editor = getSharedPreferences("user_credentials", MODE_PRIVATE).edit();
-                            editor.putString("email", email);
-                            editor.putString("password", password);
-                            editor.apply();
+                            SharedPreferences prefs = getSharedPreferences("user_credentials", MODE_PRIVATE);
+                            String savedEmail = prefs.getString("email", null);
 
-                            // Load user role and company info
-                            FBRef.refUsers.get().addOnCompleteListener(usersTask -> {
-                                if (usersTask.isSuccessful()) {
-                                    DataSnapshot companiesSnap = usersTask.getResult();
-                                    boolean found = false;
-
-                                    for (DataSnapshot companySnap : companiesSnap.getChildren()) {
-                                        if (companySnap.hasChild(current_user_id)) {
-                                            DataSnapshot userSnap = companySnap.child(current_user_id);
-                                            role = userSnap.child("role").getValue(Integer.class);
-
-                                            Intent homeIntent = new Intent(context, Messages.class);
-                                            homeIntent.putExtra("role", (role == 2 || role == 4) ? 0 : 1);
-                                            startActivity(homeIntent);
-                                            finish();
-                                            found = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (!found) {
-                                        Toast.makeText(context, "User data not found", Toast.LENGTH_SHORT).show();
-                                    }
-                                } else {
-                                    Toast.makeText(context, "Failed to read user data", Toast.LENGTH_SHORT).show();
-                                }
-                            });
+                            // Ask to save if it's a new account or not saved yet
+                            if (savedEmail == null || !savedEmail.equals(email)) {
+                                new AlertDialog.Builder(context)
+                                        .setTitle("Save this account?")
+                                        .setMessage("Do you want to save this login (" + email + ") for future use?")
+                                        .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                                            public void onClick(DialogInterface dialog, int which) {
+                                                SharedPreferences.Editor editor = prefs.edit();
+                                                editor.putString("email", email);
+                                                editor.putString("password", password);
+                                                editor.apply();
+                                                loadUserRoleAndNavigate();
+                                            }
+                                        })
+                                        .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                                            public void onClick(DialogInterface dialog, int which) {
+                                                loadUserRoleAndNavigate();
+                                            }
+                                        })
+                                        .show();
+                            } else {
+                                loadUserRoleAndNavigate(); // already saved
+                            }
 
                         } else {
-                            Toast.makeText(context, "Authentication failed: " + task.getException().getMessage(),
-                                    Toast.LENGTH_SHORT).show();
+                            Toast.makeText(context, "Authentication failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     }
                 });
     }
-    private void loginWithCredentials(String email, String password) {
+
+    /**
+     * Logs in with credentials (auto-login) and continues to role detection.
+     *
+     * @param email    saved email
+     * @param password saved password
+     */
+    private void loginWithCredentials(final String email, final String password) {
         mAuth.signInWithEmailAndPassword(email, password)
-                .addOnCompleteListener(this, task -> {
-                    if (task.isSuccessful()) {
-                        FirebaseUser user = mAuth.getCurrentUser();
-                        current_user_id = user.getUid();
-
-                        FBRef.refUsers.get().addOnCompleteListener(usersTask -> {
-                            if (usersTask.isSuccessful()) {
-                                DataSnapshot companiesSnap = usersTask.getResult();
-                                boolean found = false;
-
-                                for (DataSnapshot companySnap : companiesSnap.getChildren()) {
-                                    if (companySnap.hasChild(current_user_id)) {
-                                        DataSnapshot userSnap = companySnap.child(current_user_id);
-                                        role = userSnap.child("role").getValue(Integer.class);
-
-                                        Intent homeIntent = new Intent(context, Messages.class);
-                                        homeIntent.putExtra("role", (role == 2 || role == 4) ? 0 : 1);
-                                        startActivity(homeIntent);
-                                        finish();
-                                        found = true;
-                                        break;
-                                    }
-                                }
-
-                                if (!found) {
-                                    Toast.makeText(context, "User data not found", Toast.LENGTH_SHORT).show();
-                                }
-                            } else {
-                                Toast.makeText(context, "Failed to read user data", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-
-                    } else {
-                        Toast.makeText(context, "Auto-login failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                .addOnCompleteListener(MainActivity.this, new OnCompleteListener<AuthResult>() {
+                    @Override
+                    public void onComplete(@NonNull Task<AuthResult> task) {
+                        if (task.isSuccessful()) {
+                            FirebaseUser user = mAuth.getCurrentUser();
+                            current_user_id = user.getUid();
+                            loadUserRoleAndNavigate();
+                        } else {
+                            Toast.makeText(context, "Auto-login failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                        }
                     }
                 });
     }
 
+    /**
+     * Loads the current user's role from Firebase and navigates to Messages screen.
+     * Sends a role flag to adjust downstream behavior (team vs warehouse).
+     */
+    private void loadUserRoleAndNavigate() {
+        FBRef.refUsers.get().addOnCompleteListener(new OnCompleteListener<DataSnapshot>() {
+            @Override
+            public void onComplete(@NonNull Task<DataSnapshot> task) {
+                if (task.isSuccessful()) {
+                    DataSnapshot companiesSnap = task.getResult();
+                    boolean found = false;
+
+                    for (DataSnapshot companySnap : companiesSnap.getChildren()) {
+                        if (companySnap.hasChild(current_user_id)) {
+                            DataSnapshot userSnap = companySnap.child(current_user_id);
+                            role = userSnap.child("role").getValue(Integer.class);
+
+                            Intent intent = new Intent(context, Messages.class);
+                            intent.putExtra("role", (role == 2 || role == 4) ? 0 : 1);
+                            startActivity(intent);
+                            finish();
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found) {
+                        Toast.makeText(context, "User data not found", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(context, "Failed to read user data", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+    }
+
+    /**
+     * Navigates to the sign-up activity.
+     *
+     * @param view the "Sign up" button
+     */
+    public void goto_signup(View view) {
+        startActivity(new Intent(this, Sign_up.class));
+    }
 }
