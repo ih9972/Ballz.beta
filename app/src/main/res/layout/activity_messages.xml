@@ -8,6 +8,15 @@
     android:orientation="vertical"
     tools:context=".Messages">
 
+    <ToggleButton
+        android:id="@+id/toggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textOff="Show In-Progress Orders"
+        android:textOn="Show Completed Orders"
+        android:checked="false"
+        android:layout_margin="16dp" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/messageRecyclerView"
         android:layout_width="match_parent"

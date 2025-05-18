@@ -43,6 +43,9 @@ public class Messages extends AppCompatActivity {
     // UI for message display
     private RecyclerView recyclerMessages;
     private MessageAdapter messageAdapter;
+    private ToggleButton toggleButton;
+    private List<Order> allOrders = new ArrayList<>();
+    private List<Order> visibleOrders = new ArrayList<>();
 
     // Data
     private List<WarehouseItem> warehouseItems = new ArrayList<>();
@@ -79,6 +82,14 @@ public class Messages extends AppCompatActivity {
                     return true;
                 }
                 return true;
+            }
+        });
+        toggleButton = findViewById(R.id.toggleButton);
+
+        toggleButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                filterOrders(isChecked); // true = completed, false = in-progress
             }
         });
 
@@ -136,6 +147,7 @@ public class Messages extends AppCompatActivity {
 
     /**
      * Fetches all messages (orders/notifications) from Firebase for the current company.
+     * Filters based on ToggleButton state to show either done or not-done orders.
      */
     private void loadMessages() {
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
@@ -147,17 +159,20 @@ public class Messages extends AppCompatActivity {
         ordersRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
-                messageList.clear();
+                allOrders.clear();  // holds all relevant orders
                 for (DataSnapshot snap : snapshot.getChildren()) {
                     Order order = snap.getValue(Order.class);
                     if (order != null && (
                             uid.equals(order.getSender()) ||
                                     uid.equals(order.getReceiver()) ||
                                     "system".equals(order.getSender()))) {
-                        messageList.add(order);
+                        allOrders.add(order);
                     }
                 }
-                messageAdapter.notifyDataSetChanged();
+
+                // Filter based on toggle state
+                boolean showCompleted = toggleButton.isChecked();
+                filterOrders(showCompleted); // Updates visible list and adapter
             }
 
             @Override
@@ -166,6 +181,7 @@ public class Messages extends AppCompatActivity {
             }
         });
     }
+
 
     /**
      * Opens the dialog to create a new order.
@@ -313,5 +329,14 @@ public class Messages extends AppCompatActivity {
                 Toast.makeText(Messages.this, "Failed to send order", Toast.LENGTH_LONG).show();
             }
         });
+    }
+    private void filterOrders(boolean showCompleted) {
+        visibleOrders.clear();
+        for (Order order : allOrders) {
+            if (order.isDone() == showCompleted) {
+                visibleOrders.add(order);
+            }
+        }
+        messageAdapter.updateList(visibleOrders);
     }
 }

@@ -282,4 +282,9 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
             }
         });
     }
+    public void updateList(List<Order> newList) {
+        messageList.clear();
+        messageList.addAll(newList);
+        notifyDataSetChanged();
+    }
 }
